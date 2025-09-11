@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Route Planner — Marina Bay Sands</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+  :root{
+    --accent: #ff7a00;
+    --bg: #fff7f0;
+    --muted: #5c5c5c;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  html,body{height:100%; margin:0; background:var(--bg);}
+  .app { display:flex; flex-direction:row; height:100vh; gap:8px; padding:8px; box-sizing:border-box;}
+  .map { flex:1; border-radius:12px; overflow:hidden; }
+  #map { height:100%; width:100%; }
+  .panel {
+    width:300px; background:#fffaf5; border-radius:12px; padding:12px;
+    display:flex; flex-direction:column; gap:10px; box-sizing:border-box;
+    font-size:14px;
+  }
+  button { padding:8px 10px; border-radius:8px; border:0; font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); color:white; font-weight:600; }
+  .small{font-size:12px; padding:6px 8px;}
+  .lap-counter{display:flex;justify-content:space-between;align-items:center;background:#fff3e6;padding:8px;border-radius:8px;}
+  .weather{background:#fff3e6;padding:8px;border-radius:8px;}
+  .forecast{display:flex;gap:6px;}
+  .forecast div{flex:1;text-align:center;background:#fff;border-radius:6px;padding:6px;font-size:12px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="map"><div id="map"></div></div>
+  <aside class="panel">
+    <h3>Route Planner</h3>
+    <div>
+      <button id="undoBtn" class="small">↶ Undo</button>
+      <button id="clearBtn" class="small">🗑 Clear</button>
+      <button id="saveBtn" class="primary small">💾 Save</button>
+    </div>
+    <input id="routeName" placeholder="Route name…" />
+    <div id="savedList">No saved routes</div>
+
+    <div class="lap-counter">
+      <div>Laps: <span id="lapCount">0</span></div>
+      <div>
+        <button id="manualLap" class="small">+ Lap</button>
+        <button id="resetLap" class="small">Reset</button>
+      </div>
+    </div>
+
+    <div class="weather">
+      <div><b>Weather (Demo)</b></div>
+      <div>Location: Marina Bay Sands</div>
+      <div>Current: 30°C ☀️ Sunny</div>
+      <div class="forecast">
+        <div>Mon<br>☀️<br>31°</div>
+        <div>Tue<br>🌤<br>29°</div>
+        <div>Wed<br>🌧<br>27°</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DEFAULT_CENTER = [1.2834, 103.8607]; // Marina Bay Sands
+let map = L.map('map').setView(DEFAULT_CENTER, 16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+let waypoints=[], markers=[], polyline=L.polyline([], {color:'#ff7a00',weight:4}).addTo(map);
+
+function updateSavedList(){
+  const saved=JSON.parse(localStorage.getItem('routes')||'[]');
+  let html='';
+  if(saved.length===0){html='No saved routes';}
+  saved.forEach((r,i)=>{
+    html+=`<div>${r.name} 
+      <button onclick="loadRoute(${i})" class="small">Load</button>
+      <button onclick="delRoute(${i})" class="small">Del</button></div>`;
+  });
+  document.getElementById('savedList').innerHTML=html;
+}
+function addWaypoint(latlng){
+  const m=L.circleMarker(latlng,{radius:5,fillColor:'#ff7a00',color:'#fff',weight:2,fillOpacity:1}).addTo(map);
+  markers.push(m);
+  waypoints.push([latlng.lat, latlng.lng]);
+  polyline.setLatLngs(waypoints);
+}
+map.on('click',e=>addWaypoint(e.latlng));
+
+document.getElementById('undoBtn').onclick=()=>{
+  if(markers.length){map.removeLayer(markers.pop());waypoints.pop();polyline.setLatLngs(waypoints);}
+};
+document.getElementById('clearBtn').onclick=()=>{
+  markers.forEach(m=>map.removeLayer(m));markers=[];waypoints=[];polyline.setLatLngs([]);
+};
+document.getElementById('saveBtn').onclick=()=>{
+  const name=document.getElementById('routeName').value||'Unnamed';
+  const saved=JSON.parse(localStorage.getItem('routes')||'[]');
+  saved.push({name,points:waypoints});
+  localStorage.setItem('routes',JSON.stringify(saved));
+  updateSavedList();
+};
+
+window.loadRoute=function(i){
+  const saved=JSON.parse(localStorage.getItem('routes')||'[]')[i];
+  if(!saved)return;
+  markers.forEach(m=>map.removeLayer(m));markers=[];waypoints=[];polyline.setLatLngs([]);
+  saved.points.forEach(p=>addWaypoint({lat:p[0],lng:p[1]}));
+};
+window.delRoute=function(i){
+  let saved=JSON.parse(localStorage.getItem('routes')||'[]');
+  saved.splice(i,1);localStorage.setItem('routes',JSON.stringify(saved));updateSavedList();
+};
+updateSavedList();
+
+// Lap counter
+let laps=0;
+document.getElementById('manualLap').onclick=()=>{laps++;document.getElementById('lapCount').textContent=laps;};
+document.getElementById('resetLap').onclick=()=>{laps=0;document.getElementById('lapCount').textContent=laps;};
+</script>
+</body>
+</html>
