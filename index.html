@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Route Planner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #map { height: 100vh; width: 100vw; }
+
+    /* Orange UI bar */
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: orange;
+      padding: 10px;
+      border-radius: 12px;
+      color: white;
+      font-weight: bold;
+      display: flex;
+      gap: 10px;
+      z-index: 1000;
+    }
+
+    button {
+      background: white;
+      color: orange;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #ffe0b3;
+    }
+
+    .weather {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 165, 0, 0.9);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button onclick="undoPoint()">Undo</button>
+    <button onclick="saveRoute()">Save Route</button>
+    <button onclick="loadRoute()">Load Route</button>
+    <span>Laps: <span id="laps">0</span></span>
+  </div>
+
+  <div id="map"></div>
+  <div class="weather" id="weather">Loading weather...</div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // ------------------------------
+    // Map Setup
+    // ------------------------------
+    const map = L.map('map').setView([1.2834, 103.8607], 15); // Marina Bay Sands
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let route = [];
+    let polyline = L.polyline(route, { color: 'orange' }).addTo(map);
+    let lapCount = 0;
+
+    // ------------------------------
+    // Route Drawing
+    // ------------------------------
+    map.on('click', function(e) {
+      route.push(e.latlng);
+      polyline.setLatLngs(route);
+
+      // Check if route forms a loop (simple proximity check)
+      if (route.length > 2) {
+        const first = route[0];
+        const last = route[route.length - 1];
+        const dist = map.distance(first, last);
+        if (dist < 30) { // within 30m = lap
+          lapCount++;
+          document.getElementById('laps').textContent = lapCount;
+        }
+      }
+    });
+
+    // Undo last point
+    function undoPoint() {
+      route.pop();
+      polyline.setLatLngs(route);
+    }
+
+    // Save route to localStorage
+    function saveRoute() {
+      localStorage.setItem('savedRoute', JSON.stringify(route));
+      localStorage.setItem('lapCount', lapCount);
+      alert("Route saved!");
+    }
+
+    // Load route from localStorage
+    function loadRoute() {
+      const saved = localStorage.getItem('savedRoute');
+      const savedLaps = localStorage.getItem('lapCount');
+      if (saved) {
+        route = JSON.parse(saved);
+        polyline.setLatLngs(route);
+        lapCount = savedLaps ? parseInt(savedLaps) : 0;
+        document.getElementById('laps').textContent = lapCount;
+        alert("Route loaded!");
+      } else {
+        alert("No saved route found.");
+      }
+    }
+
+    // ------------------------------
+    // Weather API (OpenWeatherMap)
+    // ------------------------------
+    async function loadWeather() {
+      const lat = 1.2834;
+      const lon = 103.8607;
+      const apiKey = "2e99fe5cb957fbe0fda8a15f1db8fd74"; // 🔑 Replace with your OpenWeatherMap API key
+
+      try {
+        const res = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+        );
+        const data = await res.json();
+        const desc = data.weather[0].description;
+        const temp = data.main.temp.toFixed(1);
+        document.getElementById('weather').textContent =
+          `Weather: ${desc}, ${temp}°C`;
+      } catch (err) {
+        document.getElementById('weather').textContent = "Weather unavailable";
+      }
+    }
+
+    loadWeather();
+  </script>
+</body>
+</html>
