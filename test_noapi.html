@@ -30,6 +30,7 @@
   .weather{background:#fff3e6;padding:8px;border-radius:8px;}
   .forecast{display:flex;gap:6px;}
   .forecast div{flex:1;text-align:center;background:#fff;border-radius:6px;padding:6px;font-size:12px;}
+  .distance {background:#fff3e6;padding:8px;border-radius:8px;font-weight:600;}
 </style>
 </head>
 <body>
@@ -54,15 +55,14 @@
       </div>
     </div>
 
+    <div class="distance">
+      Distance: <span id="distance">0.00</span> km
+    </div>
+
     <div class="weather">
-      <div><b>Weather (Demo)</b></div>
+      <div><b>Weather</b></div>
       <div>Location: Marina Bay Sands</div>
-      <div>Current: 30°C ☀️ Sunny</div>
-      <div class="forecast">
-        <div>Mon<br>☀️<br>31°</div>
-        <div>Tue<br>🌤<br>29°</div>
-        <div>Wed<br>🌧<br>27°</div>
-      </div>
+      <div id="currentWeather">Loading...</div>
     </div>
   </aside>
 </div>
@@ -75,6 +75,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).a
 
 let waypoints=[], markers=[], polyline=L.polyline([], {color:'#ff7a00',weight:4}).addTo(map);
 
+// ------------------------------
+// Route Handling
+// ------------------------------
 function updateSavedList(){
   const saved=JSON.parse(localStorage.getItem('routes')||'[]');
   let html='';
@@ -91,14 +94,15 @@ function addWaypoint(latlng){
   markers.push(m);
   waypoints.push([latlng.lat, latlng.lng]);
   polyline.setLatLngs(waypoints);
+  updateDistance();
 }
 map.on('click',e=>addWaypoint(e.latlng));
 
 document.getElementById('undoBtn').onclick=()=>{
-  if(markers.length){map.removeLayer(markers.pop());waypoints.pop();polyline.setLatLngs(waypoints);}
+  if(markers.length){map.removeLayer(markers.pop());waypoints.pop();polyline.setLatLngs(waypoints);updateDistance();}
 };
 document.getElementById('clearBtn').onclick=()=>{
-  markers.forEach(m=>map.removeLayer(m));markers=[];waypoints=[];polyline.setLatLngs([]);
+  markers.forEach(m=>map.removeLayer(m));markers=[];waypoints=[];polyline.setLatLngs([]);updateDistance();
 };
 document.getElementById('saveBtn').onclick=()=>{
   const name=document.getElementById('routeName').value||'Unnamed';
@@ -120,10 +124,50 @@ window.delRoute=function(i){
 };
 updateSavedList();
 
-// Lap counter
+// ------------------------------
+// Lap Counter
+// ------------------------------
 let laps=0;
 document.getElementById('manualLap').onclick=()=>{laps++;document.getElementById('lapCount').textContent=laps;};
 document.getElementById('resetLap').onclick=()=>{laps=0;document.getElementById('lapCount').textContent=laps;};
+
+// ------------------------------
+// Distance Calculator
+// ------------------------------
+function updateDistance(){
+  if(waypoints.length < 2){
+    document.getElementById('distance').textContent="0.00";
+    return;
+  }
+  let dist=0;
+  for(let i=1;i<waypoints.length;i++){
+    const p1=waypoints[i-1], p2=waypoints[i];
+    dist += map.distance(p1,p2);
+  }
+  document.getElementById('distance').textContent=(dist/1000).toFixed(2);
+}
+
+// ------------------------------
+// Weather API (OpenWeatherMap)
+// ------------------------------
+async function loadWeather(){
+  const lat=DEFAULT_CENTER[0], lon=DEFAULT_CENTER[1];
+  const apiKey="2e99fe5cb957fbe0fda8a15f1db8fd74"; // 🔑 Replace with your OWM API key
+  try{
+    const res=await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`);
+    const data=await res.json();
+    if(data.cod!==200){throw new Error(data.message);}
+    const desc=data.weather[0].description;
+    const temp=data.main.temp.toFixed(1);
+    const icon=data.weather[0].icon;
+    document.getElementById('currentWeather').innerHTML=
+      `${temp}°C — ${desc} <img src="https://openweathermap.org/img/wn/${icon}.png"/>`;
+  }catch(err){
+    document.getElementById('currentWeather').textContent="Weather unavailable";
+    console.error("Weather API error:",err);
+  }
+}
+loadWeather();
 </script>
 </body>
 </html>
