@@ -1,160 +1,186 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Route Planner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Route Planner — Marina Bay Sands</title>
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <style>
-    body { margin: 0; font-family: Arial, sans-serif; }
-    #map { height: 100vh; width: 100vw; }
-
-    /* Orange UI bar */
-    .controls {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: orange;
-      padding: 10px;
-      border-radius: 12px;
-      color: white;
-      font-weight: bold;
-      display: flex;
-      gap: 10px;
-      z-index: 1000;
-    }
-
-    button {
-      background: white;
-      color: orange;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #ffe0b3;
-    }
-
-    .weather {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 165, 0, 0.9);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 10px;
-      font-size: 14px;
-      z-index: 1000;
-    }
-  </style>
+<style>
+  :root{
+    --accent: #ff7a00;
+    --bg: #fff7f0;
+    --muted: #5c5c5c;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  html,body{height:100%; margin:0; background:var(--bg);}
+  .app { display:flex; flex-direction:row; height:100vh; gap:8px; padding:8px; box-sizing:border-box;}
+  .map { flex:1; border-radius:12px; overflow:hidden; }
+  #map { height:100%; width:100%; }
+  .panel {
+    width:300px; background:#fffaf5; border-radius:12px; padding:12px;
+    display:flex; flex-direction:column; gap:10px; box-sizing:border-box;
+    font-size:14px;
+  }
+  button { padding:8px 10px; border-radius:8px; border:0; font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); color:white; font-weight:600; }
+  .small{font-size:12px; padding:6px 8px;}
+  .lap-counter{display:flex;justify-content:space-between;align-items:center;background:#fff3e6;padding:8px;border-radius:8px;}
+  .weather{background:#fff3e6;padding:8px;border-radius:8px;}
+  .forecast{display:flex;gap:6px;}
+  .forecast div{flex:1;text-align:center;background:#fff;border-radius:6px;padding:6px;font-size:12px;}
+  .distance {background:#fff3e6;padding:8px;border-radius:8px;font-weight:600;}
+</style>
 </head>
 <body>
-  <div class="controls">
-    <button onclick="undoPoint()">Undo</button>
-    <button onclick="saveRoute()">Save Route</button>
-    <button onclick="loadRoute()">Load Route</button>
-    <span>Laps: <span id="laps">0</span></span>
-  </div>
 
-  <div id="map"></div>
-  <div class="weather" id="weather">Loading weather...</div>
+<div class="app">
+  <div class="map"><div id="map"></div></div>
+  <aside class="panel">
+    <h3>Route Planner</h3>
+    <div>
+      <button id="undoBtn" class="small">↶ Undo</button>
+      <button id="clearBtn" class="small">🗑 Clear</button>
+      <button id="saveBtn" class="primary small">💾 Save</button>
+    </div>
+    <input id="routeName" placeholder="Route name…" />
+    <div id="savedList">No saved routes</div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <div class="lap-counter">
+      <div>Laps: <span id="lapCount">0</span></div>
+      <div>
+        <button id="manualLap" class="small">+ Lap</button>
+        <button id="resetLap" class="small">Reset</button>
+      </div>
+    </div>
 
-  <script>
-    // ------------------------------
-    // Map Setup
-    // ------------------------------
-    const map = L.map('map').setView([1.2834, 103.8607], 15); // Marina Bay Sands
+    <div class="distance">
+      Distance: <span id="distance">0.00</span> km
+    </div>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    <div class="weather">
+      <div><b>Weather</b></div>
+      <div>Location: Marina Bay Sands</div>
+      <div id="currentWeather">Loading...</div>
+    </div>
+  </aside>
+</div>
 
-    let route = [];
-    let polyline = L.polyline(route, { color: 'orange' }).addTo(map);
-    let lapCount = 0;
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DEFAULT_CENTER = [1.2834, 103.8607]; // Marina Bay Sands
+let map = L.map('map').setView(DEFAULT_CENTER, 16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-    // ------------------------------
-    // Route Drawing
-    // ------------------------------
-    map.on('click', function(e) {
-      route.push(e.latlng);
-      polyline.setLatLngs(route);
+let waypoints=[], markers=[], polyline=L.polyline([], {color:'#ff7a00',weight:4}).addTo(map);
 
-      // Check if route forms a loop (simple proximity check)
-      if (route.length > 2) {
-        const first = route[0];
-        const last = route[route.length - 1];
-        const dist = map.distance(first, last);
-        if (dist < 30) { // within 30m = lap
-          lapCount++;
-          document.getElementById('laps').textContent = lapCount;
-        }
-      }
-    });
+// ------------------------------
+// Route Handling
+// ------------------------------
+function updateSavedList(){
+  const saved=JSON.parse(localStorage.getItem('routes')||'[]');
+  let html='';
+  if(saved.length===0){html='No saved routes';}
+  saved.forEach((r,i)=>{
+    html+=`<div>${r.name} 
+      <button onclick="loadRoute(${i})" class="small">Load</button>
+      <button onclick="delRoute(${i})" class="small">Del</button></div>`;
+  });
+  document.getElementById('savedList').innerHTML=html;
+}
+function addWaypoint(latlng){
+  const m=L.circleMarker(latlng,{radius:5,fillColor:'#ff7a00',color:'#fff',weight:2,fillOpacity:1}).addTo(map);
+  markers.push(m);
+  waypoints.push([latlng.lat, latlng.lng]);
+  polyline.setLatLngs(waypoints);
+  updateDistance();
+}
+map.on('click',e=>addWaypoint(e.latlng));
 
-    // Undo last point
-    function undoPoint() {
-      route.pop();
-      polyline.setLatLngs(route);
-    }
+document.getElementById('undoBtn').onclick=()=>{
+  if(markers.length){map.removeLayer(markers.pop());waypoints.pop();polyline.setLatLngs(waypoints);updateDistance();}
+};
+document.getElementById('clearBtn').onclick=()=>{
+  markers.forEach(m=>map.removeLayer(m));markers=[];waypoints=[];polyline.setLatLngs([]);updateDistance();
+};
+document.getElementById('saveBtn').onclick=()=>{
+  const name=document.getElementById('routeName').value||'Unnamed';
+  const saved=JSON.parse(localStorage.getItem('routes')||'[]');
+  saved.push({name,points:waypoints});
+  localStorage.setItem('routes',JSON.stringify(saved));
+  updateSavedList();
+};
 
-    // Save route to localStorage
-    function saveRoute() {
-      localStorage.setItem('savedRoute', JSON.stringify(route));
-      localStorage.setItem('lapCount', lapCount);
-      alert("Route saved!");
-    }
+window.loadRoute=function(i){
+  const saved=JSON.parse(localStorage.getItem('routes')||'[]')[i];
+  if(!saved)return;
+  markers.forEach(m=>map.removeLayer(m));markers=[];waypoints=[];polyline.setLatLngs([]);
+  saved.points.forEach(p=>addWaypoint({lat:p[0],lng:p[1]}));
+};
+window.delRoute=function(i){
+  let saved=JSON.parse(localStorage.getItem('routes')||'[]');
+  saved.splice(i,1);localStorage.setItem('routes',JSON.stringify(saved));updateSavedList();
+};
+updateSavedList();
 
-    // Load route from localStorage
-    function loadRoute() {
-      const saved = localStorage.getItem('savedRoute');
-      const savedLaps = localStorage.getItem('lapCount');
-      if (saved) {
-        route = JSON.parse(saved);
-        polyline.setLatLngs(route);
-        lapCount = savedLaps ? parseInt(savedLaps) : 0;
-        document.getElementById('laps').textContent = lapCount;
-        alert("Route loaded!");
-      } else {
-        alert("No saved route found.");
-      }
-    }
+// ------------------------------
+// Lap Counter
+// ------------------------------
+let laps=0;
+document.getElementById('manualLap').onclick=()=>{laps++;document.getElementById('lapCount').textContent=laps;};
+document.getElementById('resetLap').onclick=()=>{laps=0;document.getElementById('lapCount').textContent=laps;};
 
-    // ------------------------------
-    // Weather API (OpenWeatherMap)
-    // ------------------------------
-    async function loadWeather() {
-      const lat = 1.2834;
-      const lon = 103.8607;
-      const apiKey = "2e99fe5cb957fbe0fda8a15f1db8fd74"; // 🔑 Replace with your OpenWeatherMap API key
+// ------------------------------
+// Distance Calculator
+// ------------------------------
+function updateDistance(){
+  if(waypoints.length < 2){
+    document.getElementById('distance').textContent="0.00";
+    return;
+  }
+  let dist=0;
+  for(let i=1;i<waypoints.length;i++){
+    const p1=waypoints[i-1], p2=waypoints[i];
+    dist += map.distance(p1,p2);
+  }
+  document.getElementById('distance').textContent=(dist/1000).toFixed(2);
+}
 
-      try {
-        const res = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
-        );
-        const data = await res.json();
-        const desc = data.weather[0].description;
-        const temp = data.main.temp.toFixed(1);
-        document.getElementById('weather').textContent =
-          `Weather: ${desc}, ${temp}°C`;
-      } catch (err) {
-        document.getElementById('weather').textContent = "Weather unavailable";
-      }
-    }
+// ------------------------------
+// Weather API (Open-Meteo, no key needed!)
+// ------------------------------
+async function loadWeather(){
+  const lat=DEFAULT_CENTER[0], lon=DEFAULT_CENTER[1];
+  try{
+    const res=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+    const data=await res.json();
+    const temp=data.current_weather.temperature;
+    const wind=data.current_weather.windspeed;
+    const code=data.current_weather.weathercode;
+    const desc=weatherCodeToText(code);
+    document.getElementById('currentWeather').textContent=
+      `${temp}°C — ${desc}, Wind ${wind} km/h`;
+  }catch(err){
+    document.getElementById('currentWeather').textContent="Weather unavailable";
+    console.error("Weather API error:",err);
+  }
+}
 
-    loadWeather();
-  </script>
+// Translate Open-Meteo weather codes
+function weatherCodeToText(code){
+  const map={
+    0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+    45:"Fog",48:"Depositing rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",
+    61:"Slight rain",63:"Rain",65:"Heavy rain",
+    71:"Slight snow",73:"Snow",75:"Heavy snow",
+    80:"Rain showers",81:"Rain showers",82:"Heavy rain showers",
+    95:"Thunderstorm",96:"Thunderstorm with hail",99:"Thunderstorm with heavy hail"
+  };
+  return map[code]||"Unknown";
+}
+
+loadWeather();
+</script>
 </body>
 </html>
