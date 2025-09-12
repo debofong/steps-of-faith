@@ -16,12 +16,12 @@
   }
   html,body{height:100%; margin:0; background:var(--bg);}
   .app { display:flex; flex-direction:row; height:100vh; gap:8px; padding:8px; box-sizing:border-box;}
-  .map { flex:1; border-radius:12px; overflow:hidden; }
+  .map { flex:1; border-radius:12px; overflow:hidden; position:relative; }
   #map { height:100%; width:100%; }
   .panel {
     width:300px; background:#fffaf5; border-radius:12px; padding:12px;
     display:flex; flex-direction:column; gap:10px; box-sizing:border-box;
-    font-size:14px;
+    font-size:14px; z-index:999;
   }
   button { padding:8px 10px; border-radius:8px; border:0; font:inherit; cursor:pointer; }
   button.primary { background:var(--accent); color:white; font-weight:600; }
@@ -31,13 +31,49 @@
   .forecast{display:flex;gap:6px;}
   .forecast div{flex:1;text-align:center;background:#fff;border-radius:6px;padding:6px;font-size:12px;}
   .distance {background:#fff3e6;padding:8px;border-radius:8px;font-weight:600;}
+
+  /* Floating menu button (mobile only) */
+  #menuToggle {
+    position:absolute;
+    top:12px;
+    left:12px;
+    z-index:1000;
+    background:var(--accent);
+    color:white;
+    border:none;
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:16px;
+    cursor:pointer;
+    display:none; /* hidden on desktop */
+  }
+
+  /* Mobile layout */
+  @media (max-width:768px){
+    .app { flex-direction:column; }
+    .panel {
+      position:absolute;
+      top:0; right:0; bottom:0;
+      width:80%; max-width:320px;
+      height:100%;
+      box-shadow:-2px 0 8px rgba(0,0,0,0.2);
+      transform:translateX(100%);
+      transition:transform 0.3s ease;
+    }
+    .panel.show { transform:translateX(0); }
+    #menuToggle { display:block; }
+  }
 </style>
 </head>
 <body>
 
 <div class="app">
-  <div class="map"><div id="map"></div></div>
-  <aside class="panel">
+  <div class="map">
+    <div id="map"></div>
+    <button id="menuToggle">☰ Menu</button>
+  </div>
+
+  <aside class="panel" id="sidePanel">
     <h3>Route Planner</h3>
     <div>
       <button id="undoBtn" class="small">↶ Undo</button>
@@ -74,6 +110,13 @@ let map = L.map('map').setView(DEFAULT_CENTER, 16);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
 let waypoints=[], markers=[], polyline=L.polyline([], {color:'#ff7a00',weight:4}).addTo(map);
+
+// ------------------------------
+// Floating Menu Toggle (mobile)
+// ------------------------------
+const menuBtn=document.getElementById('menuToggle');
+const sidePanel=document.getElementById('sidePanel');
+menuBtn.addEventListener('click',()=>{ sidePanel.classList.toggle('show'); });
 
 // ------------------------------
 // Route Handling
@@ -167,19 +210,17 @@ async function loadWeather(){
   }
 }
 
-// Translate Open-Meteo weather codes
 function weatherCodeToText(code){
   const map={
     0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
-    45:"Fog",48:"Depositing rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",
-    61:"Slight rain",63:"Rain",65:"Heavy rain",
-    71:"Slight snow",73:"Snow",75:"Heavy snow",
-    80:"Rain showers",81:"Rain showers",82:"Heavy rain showers",
-    95:"Thunderstorm",96:"Thunderstorm with hail",99:"Thunderstorm with heavy hail"
+    45:"Fog",48:"Rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",
+    61:"Light rain",63:"Rain",65:"Heavy rain",
+    71:"Light snow",73:"Snow",75:"Heavy snow",
+    80:"Rain showers",81:"Rain showers",82:"Heavy showers",
+    95:"Thunderstorm",96:"Thunderstorm w/ hail",99:"Severe thunderstorm"
   };
   return map[code]||"Unknown";
 }
-
 loadWeather();
 </script>
 </body>
