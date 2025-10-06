@@ -232,6 +232,7 @@ async function setLocationByPostal() {
 
     // Update weather and UI
     status.textContent = `Set to: ${display_name}`;
+    document.querySelector('.weather div:nth-child(2)').textContent = `Location: ${display_name}`;
     await loadWeatherForCoords(lat, lon);
 
   } catch (err) {
@@ -258,9 +259,6 @@ async function loadWeatherForCoords(lat, lon){
   }
 }
 
-// Modify your initial load to call with the default center:
-loadWeatherForCoords(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
-
 function weatherCodeToText(code){
   const map={
     0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
@@ -272,6 +270,9 @@ function weatherCodeToText(code){
   };
   return map[code]||"Unknown";
 }
+
+// Modify your initial load to call with the default center:
+loadWeatherForCoords(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
 </script>
 </body>
 </html>
