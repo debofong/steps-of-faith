@@ -83,6 +83,13 @@
     <input id="routeName" placeholder="Route name…" />
     <div id="savedList">No saved routes</div>
 
+    <div class="location-setup">
+      <b>Starting Location</b><br>
+      <input id="postalCode" placeholder="Enter postal code…" />
+      <button id="setLocationBtn" class="small">📍 Set Location</button>
+      <div id="locationStatus" class="small" style="color:var(--muted)"></div>
+    </div>
+
     <div class="lap-counter">
       <div>Laps: <span id="lapCount">0</span></div>
       <div>
@@ -193,16 +200,58 @@ function updateDistance(){
 // ------------------------------
 // Weather API (Open-Meteo, no key needed!)
 // ------------------------------
-async function loadWeather(){
-  const lat=DEFAULT_CENTER[0], lon=DEFAULT_CENTER[1];
+async function setLocationByPostal() {
+  const postal = document.getElementById('postalCode').value.trim();
+  const status = document.getElementById('locationStatus');
+
+  if (!postal) {
+    status.textContent = "Please enter a postal code.";
+    return;
+  }
+
+  status.textContent = "Looking up location…";
+
+  try {
+    // Nominatim API call
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${postal}&country=Singapore&format=json`);
+    const data = await res.json();
+
+    if (data.length === 0) {
+      status.textContent = "No results found for that postal code.";
+      return;
+    }
+
+    const { lat, lon, display_name } = data[0];
+
+    // Update map center
+    map.setView([lat, lon], 16);
+
+    // Optionally mark the starting point
+    if (window.startMarker) map.removeLayer(window.startMarker);
+    window.startMarker = L.marker([lat, lon], { title: "Starting Point" }).addTo(map);
+
+    // Update weather and UI
+    status.textContent = `Set to: ${display_name}`;
+    document.querySelector('.weather div:nth-child(2)').textContent = `Location: ${display_name}`;
+    await loadWeatherForCoords(lat, lon);
+
+  } catch (err) {
+    console.error("Geocoding error:", err);
+    status.textContent = "Error retrieving location.";
+  }
+}
+
+document.getElementById('setLocationBtn').onclick = setLocationByPostal;
+
+async function loadWeatherForCoords(lat, lon){
   try{
-    const res=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
-    const data=await res.json();
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+    const data = await res.json();
     const temp=data.current_weather.temperature;
     const wind=data.current_weather.windspeed;
     const code=data.current_weather.weathercode;
     const desc=weatherCodeToText(code);
-    document.getElementById('currentWeather').textContent=
+    document.getElementById('currentWeather').textContent =
       `${temp}°C — ${desc}, Wind ${wind} km/h`;
   }catch(err){
     document.getElementById('currentWeather').textContent="Weather unavailable";
@@ -221,7 +270,9 @@ function weatherCodeToText(code){
   };
   return map[code]||"Unknown";
 }
-loadWeather();
+
+// Modify your initial load to call with the default center:
+loadWeatherForCoords(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
 </script>
 </body>
 </html>
